@@ -1,0 +1,162 @@
+import { useState, useEffect, useRef } from 'react'
+import { Button } from "/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "/components/ui/card"
+import { Play, Pause, RotateCcw, Volume2, VolumeX } from "lucide-react"
+
+export default function MeditationTimer() {
+  const [timeLeft, setTimeLeft] = useState(5 * 60) // 5 minutes in seconds
+  const [isActive, setIsActive] = useState(false)
+  const [soundType, setSoundType] = useState<'rain' | 'waves'>('rain')
+  const [isMuted, setIsMuted] = useState(false)
+  const [sessions, setSessions] = useState<Array<{date: string, duration: number}>>([])
+  const audioRef = useRef<HTMLAudioElement>(null)
+
+  // Load sessions from localStorage on mount
+  useEffect(() => {
+    const savedSessions = localStorage.getItem('meditationSessions')
+    if (savedSessions) {
+      setSessions(JSON.parse(savedSessions))
+    }
+  }, [])
+
+  // Timer logic
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null
+
+    if (isActive && timeLeft > 0) {
+      interval = setInterval(() => {
+        setTimeLeft((prev) => prev - 1)
+      }, 1000)
+    } else if (timeLeft === 0 && isActive) {
+      setIsActive(false)
+      // Save completed session
+      const newSession = {
+        date: new Date().toLocaleString(),
+        duration: 5 * 60
+      }
+      const updatedSessions = [newSession, ...sessions].slice(0, 10) // Keep last 10 sessions
+      setSessions(updatedSessions)
+      localStorage.setItem('meditationSessions', JSON.stringify(updatedSessions))
+    }
+
+    return () => {
+      if (interval) clearInterval(interval)
+    }
+  }, [isActive, timeLeft, sessions])
+
+  // Sound control
+  useEffect(() => {
+    if (!audioRef.current) return
+
+    if (isActive && !isMuted) {
+      audioRef.current.loop = true
+      audioRef.current.play().catch(e => console.log("Audio play error:", e))
+    } else {
+      audioRef.current.pause()
+    }
+  }, [isActive, isMuted, soundType])
+
+  const toggleTimer = () => {
+    setIsActive(!isActive)
+  }
+
+  const resetTimer = () => {
+    setIsActive(false)
+    setTimeLeft(5 * 60)
+  }
+
+  const formatTime = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`
+  }
+
+  return (
+    <div className="min-h-screen bg-blue-50 flex items-center justify-center p-4">
+      <audio 
+        ref={audioRef} 
+        src={soundType === 'rain' 
+          ? 'https://assets.mixkit.co/sfx/preview/mixkit-rain-loop-1246.mp3' 
+          : 'https://assets.mixkit.co/sfx/preview/mixkit-waves-coming-to-shore-2070.mp3'}
+      />
+
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <CardTitle className="text-2xl text-center">Meditation Timer</CardTitle>
+          <CardDescription className="text-center">
+            Take a moment to breathe and relax
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Timer Display */}
+          <div className="text-center">
+            <div className="text-6xl font-bold mb-6 text-blue-600">
+              {formatTime(timeLeft)}
+            </div>
+          </div>
+
+          {/* Controls */}
+          <div className="flex justify-center space-x-4">
+            <Button
+              size="lg"
+              onClick={toggleTimer}
+              className="w-32"
+            >
+              {isActive ? <Pause className="w-4 h-4 mr-2" /> : <Play className="w-4 h-4 mr-2" />}
+              {isActive ? 'Pause' : 'Start'}
+            </Button>
+            <Button
+              size="lg"
+              variant="outline"
+              onClick={resetTimer}
+              className="w-32"
+            >
+              <RotateCcw className="w-4 h-4 mr-2" />
+              Reset
+            </Button>
+          </div>
+
+          {/* Sound Controls */}
+          <div className="flex justify-center items-center space-x-4">
+            <Button
+              variant={soundType === 'rain' ? 'default' : 'outline'}
+              onClick={() => setSoundType('rain')}
+              size="sm"
+            >
+              Rain
+            </Button>
+            <Button
+              variant={soundType === 'waves' ? 'default' : 'outline'}
+              onClick={() => setSoundType('waves')}
+              size="sm"
+            >
+              Waves
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsMuted(!isMuted)}
+            >
+              {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+            </Button>
+          </div>
+
+          {/* Session History */}
+          {sessions.length > 0 && (
+            <div className="mt-8">
+              <h3 className="text-lg font-semibold mb-2">Recent Sessions</h3>
+              <div className="space-y-2 max-h-40 overflow-y-auto">
+                {sessions.map((session, index) => (
+                  <div key={index} className="flex justify-between items-center p-2 bg-blue-50 rounded">
+                    <span>{session.date}</span>
+                    <span className="font-medium">{formatTime(session.duration)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
